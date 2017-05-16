@@ -40,48 +40,6 @@
 					<collision>collision</collision>
 				</contact>
 			</sensor>
-
-			<sensor type="camera" name="camera">
-				<pose>-3.4798 0.0 2.54 0.0 0.785398 0.0</pose>
-				<visualize>true</visualize>
-				<update_rate>6.0</update_rate>
-				<camera name="april_tag_motion_tracking">
-					<horizontal_fov>1.22173<!--1.0123--></horizontal_fov>
-					<image>
-						<width>1920<!--320--></width>
-						<height>1080<!--240--></height>
-						<format>B8G8R8</format>
-					</image>
-					<clip>
-						<near>0.02</near>
-						<far>300</far>
-					</clip>
-					<noise>
-						<type>gaussian</type>
-						<mean>0.0</mean>
-						<stddev>0.007</stddev>
-					</noise>
-				</camera>
-				<plugin name="camera_controller" filename="libgazebo_ros_camera.so">
-					<alwaysOn>true</alwaysOn>
-					<updateRate>0.0</updateRate>
-					<cameraName>/collection_disk/camera</cameraName>
-					<imageTopicName>/collection_disk/camera/image</imageTopicName>
-					<cameraInfoTopicName>/collection_disk/camera/info</cameraInfoTopicName>
-					<frameName>collection_disk_camera_link</frameName>
-					<hackBaseline>0.1</hackBaseline>
-					<distortionK1>0.0</distortionK1>
-					<distortionK2>0.0</distortionK2>
-					<distortionK3>0.0</distortionK3>
-					<distortionT1>0.0</distortionT1>
-					<distortionT2>0.0</distortionT2>
-					<CxPrime>0.0</CxPrime>
-					<Cx>0.0</Cx>
-					<Cy>0.0</Cy>
-					<focalLength>0.0</focalLength>
-				</plugin>
-			</sensor>
-
 		</link>
 
 		<!-- Score Plugin -->
