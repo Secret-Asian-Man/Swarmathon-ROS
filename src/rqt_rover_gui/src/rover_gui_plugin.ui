@@ -2629,7 +2629,7 @@ border: 1px solid white;
    <property name="geometry">
     <rect>
      <x>10</x>
-     <y>450</y>
+     <y>440</y>
      <width>191</width>
      <height>20</height>
     </rect>
@@ -2839,7 +2839,7 @@ QTabBar::tab:only-one {
    <property name="geometry">
     <rect>
      <x>10</x>
-     <y>480</y>
+     <y>470</y>
      <width>191</width>
      <height>20</height>
     </rect>
@@ -2883,7 +2883,7 @@ QTabBar::tab:only-one {
     </rect>
    </property>
    <property name="text">
-    <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; color:#ffffff;&quot;&gt;April Tag Camera(s)&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+    <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; color:#ffffff;&quot;&gt;April Tag Cameras&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
    </property>
   </widget>
  </widget>
