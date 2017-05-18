@@ -27,34 +27,30 @@
 #include <std_msgs/Float32.h>
 #include <std_msgs/UInt8.h>
 #include <algorithm>
-
 #include <boost/property_tree/xml_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/foreach.hpp>
-
-//#include <regex> // For regex expressions
-
 #include "MapData.h"
-
 #include <cv_bridge/cv_bridge.h>
 #include <opencv/cv.h>
+//#include <regex> // For regex expressions
 
 using namespace std;
 
 using boost::property_tree::ptree;
 
-namespace rqt_rover_gui 
+namespace rqt_rover_gui {
+
+RoverGUIPlugin::RoverGUIPlugin() :
+    rqt_gui_cpp::Plugin(),
+    widget(0),
+    disconnect_threshold(5.0), // Rovers are marked as diconnected if they haven't sent a status message for 5 seconds
+    current_simulated_time_in_seconds(0.0),
+    last_current_time_update_in_seconds(0.0),
+    timer_start_time_in_seconds(0.0),
+    timer_stop_time_in_seconds(0.0),
+    is_timer_on(false)
 {
-  RoverGUIPlugin::RoverGUIPlugin() :
-      rqt_gui_cpp::Plugin(),
-      widget(0),
-      disconnect_threshold(5.0), // Rovers are marked as diconnected if they haven't sent a status message for 5 seconds
-      current_simulated_time_in_seconds(0.0),
-      last_current_time_update_in_seconds(0.0),
-      timer_start_time_in_seconds(0.0),
-      timer_stop_time_in_seconds(0.0),
-      is_timer_on(false)
-  {
     setObjectName("RoverGUI");
     info_log_messages = "";
     diag_log_messages = "";
@@ -86,18 +82,16 @@ namespace rqt_rover_gui
     barrier_clearance = 0.5; // Used to prevent targets being placed to close to walls
 
     map_data = new MapData();
-  }
+}
 
-  void RoverGUIPlugin::initPlugin(qt_gui_cpp::PluginContext& context)
-  {
+void RoverGUIPlugin::initPlugin(qt_gui_cpp::PluginContext& context)
+{
     cout << "Rover GUI Starting..." << endl;
 
     QStringList argv = context.argv();
 
     widget = new QWidget();
-
     ui.setupUi(widget);
-    
     context.addWidget(widget);
 
     // Next two lines allow us to catch keyboard input
@@ -116,15 +110,12 @@ namespace rqt_rover_gui
 
     // Setup QT message connections
     connect(this, SIGNAL(sendDiagsDataUpdate(QString, QString, QColor)), this, SLOT(receiveDiagsDataUpdate(QString, QString,QColor)));
-
     connect(ui.rover_list, SIGNAL(currentItemChanged(QListWidgetItem*,QListWidgetItem*)), this, SLOT(currentRoverChangedEventHandler(QListWidgetItem*,QListWidgetItem*)));
     connect(ui.rover_list, SIGNAL(itemDoubleClicked(QListWidgetItem*)), this, SLOT(refocusKeyboardEventHandler()));
     connect(ui.rover_list, SIGNAL(itemClicked(QListWidgetItem*)), this, SLOT(refocusKeyboardEventHandler()));
-
     connect(ui.april_tag_camera_list, SIGNAL(currentItemChanged(QListWidgetItem*,QListWidgetItem*)), this, SLOT(currentAprilTagCameraChangedEventHandler(QListWidgetItem*,QListWidgetItem*)));
     connect(ui.april_tag_camera_list, SIGNAL(itemDoubleClicked(QListWidgetItem*)), this, SLOT(refocusKeyboardEventHandler()));
     connect(ui.april_tag_camera_list, SIGNAL(itemClicked(QListWidgetItem*)), this, SLOT(refocusKeyboardEventHandler()));
-    
     connect(ui.ekf_checkbox, SIGNAL(toggled(bool)), this, SLOT(EKFCheckboxToggledEventHandler(bool)));
     connect(ui.gps_checkbox, SIGNAL(toggled(bool)), this, SLOT(GPSCheckboxToggledEventHandler(bool)));
     connect(ui.encoder_checkbox, SIGNAL(toggled(bool)), this, SLOT(encoderCheckboxToggledEventHandler(bool)));
@@ -139,7 +130,6 @@ namespace rqt_rover_gui
     connect(ui.map_manual_radio_button, SIGNAL(toggled(bool)), this, SLOT(mapManualRadioButtonEventHandler(bool)));
     connect(ui.map_popout_button, SIGNAL(pressed()), this, SLOT(mapPopoutButtonEventHandler()));
     connect(this, SIGNAL(allStopButtonSignal()), this, SLOT(allStopButtonEventHandler()));
-
 
     // Joystick output display - Drive
     connect(this, SIGNAL(joystickDriveForwardUpdate(double)), ui.joy_lcd_drive_forward, SLOT(display(double)));
@@ -167,18 +157,22 @@ namespace rqt_rover_gui
     connect(ui.map_frame, SIGNAL(sendInfoLogMessage(QString)), this, SLOT(receiveInfoLogMessage(QString)));
 
     // Add the checkbox handler so we can process events. We have to listen for itemChange events since
-    // we don't have a real chackbox with toggle events
+    // we don't have a real checkbox with toggle events
     connect(ui.map_selection_list, SIGNAL(itemChanged(QListWidgetItem*)), this, SLOT(mapSelectionListItemChangedHandler(QListWidgetItem*)));
 
     // Create a subscriber to listen for joystick events
     joystick_subscriber = nh.subscribe("/joy", 1000, &RoverGUIPlugin::joyEventHandler, this);
 
-    emit sendInfoLogMessage("Searching for rovers...");
+    emit sendInfoLogMessage("Searching for rovers and cameras...");
 
     // Add discovered rovers to the GUI list
     rover_poll_timer = new QTimer(this);
     connect(rover_poll_timer, SIGNAL(timeout()), this, SLOT(pollRoversTimerEventHandler()));
     rover_poll_timer->start(5000);
+    
+    camera_poll_timer = new QTimer(this);
+    connect(camera_poll_timer, SIGNAL(timeout()), this, SLOT(pollCamerasTimerEventHandler()));
+    camera_poll_timer->start(5000);
 
     // Setup the initial display parameters for the map
     ui.map_frame->setMapData(map_data);
@@ -216,17 +210,18 @@ namespace rqt_rover_gui
     diag_log_subscriber = nh.subscribe("/diagsLog", 10, &RoverGUIPlugin::diagLogMessageEventHandler, this);
 
     emit updateNumberOfSatellites("<font color='white'>Number of GPS Satellites: ---</font>");
-  }
+}
 
-  void RoverGUIPlugin::shutdownPlugin()
-  {
+void RoverGUIPlugin::shutdownPlugin()
+{
     map_data->clear(); // Clear the map and stop drawing before the map_frame is destroyed
     ui.map_frame->clear();
     clearSimulationButtonEventHandler();
     rover_poll_timer->stop();
+    camera_poll_timer->stop();
     stopROSJoyNode();
     ros::shutdown();
-  }
+}
 
 void RoverGUIPlugin::saveSettings(qt_gui_cpp::Settings& plugin_settings, qt_gui_cpp::Settings& instance_settings) const
 {
@@ -240,7 +235,7 @@ void RoverGUIPlugin::restoreSettings(const qt_gui_cpp::Settings& plugin_settings
 // Receives messages from the ROS joystick driver and used them to articulate the gripper and drive the rover.
 void RoverGUIPlugin::joyEventHandler(const sensor_msgs::Joy::ConstPtr& joy_msg)
 {
-     // Give the array values some helpful names:
+    // Give the array values some helpful names:
     int left_stick_x_axis = 0; // Gripper fingers close and open
     int left_stick_y_axis = 1; // Gripper wrist up and down
 
@@ -249,9 +244,9 @@ void RoverGUIPlugin::joyEventHandler(const sensor_msgs::Joy::ConstPtr& joy_msg)
 
     // Note: joystick stick axis output value are between -1 and 1
 
-     if (joystick_publisher)
-        {
-         // Handle drive commands - BEGIN
+    if (joystick_publisher)
+    {
+        // Handle drive commands - BEGIN
 
         //Set the gui values. Filter values to be large enough to move the physical rover.
         if (joy_msg->axes[right_stick_y_axis] >= 0.1)
@@ -271,11 +266,11 @@ void RoverGUIPlugin::joyEventHandler(const sensor_msgs::Joy::ConstPtr& joy_msg)
 
         if (joy_msg->axes[right_stick_x_axis] >= 0.1)
         {
-	  emit joystickDriveLeftUpdate(joy_msg->axes[right_stick_x_axis]);
+            emit joystickDriveLeftUpdate(joy_msg->axes[right_stick_x_axis]);
         }
         if (joy_msg->axes[right_stick_x_axis] <= -0.1)
         {
-	  emit joystickDriveRightUpdate(-joy_msg->axes[right_stick_x_axis]);
+            emit joystickDriveRightUpdate(-joy_msg->axes[right_stick_x_axis]);
         }
         //If value is too small, display 0.
         if (abs(joy_msg->axes[right_stick_x_axis]) < 0.1)
@@ -346,7 +341,6 @@ void RoverGUIPlugin::joyEventHandler(const sensor_msgs::Joy::ConstPtr& joy_msg)
         }
 
         // Handle gripper commands - END
-
 
         joystick_publisher.publish(joy_msg);
     }
@@ -484,19 +478,21 @@ set<string> RoverGUIPlugin::findConnectedRovers()
 
     stringstream ss;
 
-   for (ros::master::V_TopicInfo::iterator it = master_topics.begin() ; it != master_topics.end(); it++)
+    for (ros::master::V_TopicInfo::iterator it = master_topics.begin() ; it != master_topics.end(); it++)
     {
         const ros::master::TopicInfo& info = *it;
 
         string rover_name;
 
         std::size_t found = info.name.find("/status");
-          if (found!=std::string::npos)
-          {
-            rover_name = info.name.substr(1,found-1);
+        
+        if(found != std::string::npos)
+        {
+            rover_name = info.name.substr(1, found-1);
 
             found = rover_name.find("/"); // Eliminate potential names with / in them
-            if (found==std::string::npos)
+
+            if (found == std::string::npos)
             {
                 rovers.insert(rover_name);
             }
@@ -504,6 +500,39 @@ set<string> RoverGUIPlugin::findConnectedRovers()
     }
 
     return rovers;
+}
+
+set<string> RoverGUIPlugin::findConnectedCameras()
+{
+    set<string> cameras;
+
+    ros::master::V_TopicInfo master_topics;
+    ros::master::getTopics(master_topics);
+
+    stringstream ss;
+
+    for (ros::master::V_TopicInfo::iterator it = master_topics.begin() ; it != master_topics.end(); it++)
+    {
+        const ros::master::TopicInfo& info = *it;
+
+        string camera_name;
+
+        std::size_t found = info.name.find("/camera_status");
+        
+        if(found != std::string::npos)
+        {
+            camera_name = info.name.substr(1, found-1);
+
+            found = camera_name.find("/"); // Eliminate potential names with / in them
+
+            if (found == std::string::npos)
+            {
+                cameras.insert(camera_name);
+            }
+        }
+    }
+
+    return cameras;
 }
 
 // Receives and stores the status update messages from rovers
@@ -694,6 +723,7 @@ void RoverGUIPlugin::currentRoverChangedEventHandler(QListWidgetItem *current, Q
     ui.joystick_control_radio_button->setEnabled(true);
 }
 
+
 void RoverGUIPlugin::currentAprilTagCameraChangedEventHandler(QListWidgetItem *current, QListWidgetItem *previous)
 {
     // If we select an april tag camera to view, we must deselect the current rover.
@@ -711,7 +741,7 @@ void RoverGUIPlugin::currentAprilTagCameraChangedEventHandler(QListWidgetItem *c
 
     //Set up subscribers
     image_transport::ImageTransport it(nh);
-    camera_subscriber = it.subscribe("/"+camera_name+"/camera/image", 1, &RoverGUIPlugin::cameraEventHandler, this, image_transport::TransportHints("theora"));
+    camera_subscriber = it.subscribe("/"+camera_name+"/camera/image", 1, &RoverGUIPlugin::cameraEventHandler, this, image_transport::TransportHints("theora"));        
 }
     
 void RoverGUIPlugin::pollRoversTimerEventHandler()
@@ -934,6 +964,29 @@ void RoverGUIPlugin::pollRoversTimerEventHandler()
 	    diags_item->setForeground(Qt::red);
 
 	    diags_item->setText("disconnected");
+        }
+    }
+}
+
+void RoverGUIPlugin::pollCamerasTimerEventHandler()
+{
+    // Returns cameras that have created a camera_status topic
+    set<string>new_camera_names = findConnectedCameras();
+
+    // the list of cameras has been updated because either a camera was connected, or disconnected
+    // and is/is not publishing on its camera_status publisher
+    if(camera_names != new_camera_names)
+    {
+        camera_names = new_camera_names;
+
+        ui.april_tag_camera_list->clearSelection();
+        ui.april_tag_camera_list->clear();
+        
+        for(set<string>::const_iterator i = rover_names.begin(); i != rover_names.end(); ++i)
+        {
+            QListWidgetItem* new_item = new QListWidgetItem(QString::fromStdString(*i));
+            new_item->setForeground(Qt::white);
+            ui.april_tag_camera_list->addItem(new_item);
         }
     }
 }
@@ -1779,20 +1832,20 @@ void RoverGUIPlugin::buildSimulationButtonEventHandler()
 
    //displayLogMessage("Starting the gazebo client to visualize the simulation.");
    //sim_mgr.startGazeboClient();
+    
+    ui.visualize_simulation_button->setEnabled(true);
+    ui.clear_simulation_button->setEnabled(true);
 
-   ui.visualize_simulation_button->setEnabled(true);
-   ui.clear_simulation_button->setEnabled(true);
-
-   ui.visualize_simulation_button->setStyleSheet("color: white;border:1px solid white;");
-   ui.clear_simulation_button->setStyleSheet("color: white;border:1px solid white;");
+    ui.visualize_simulation_button->setStyleSheet("color: white;border:1px solid white;");
+    ui.clear_simulation_button->setStyleSheet("color: white;border:1px solid white;");
 
     ui.simulation_timer_combo_box->setEnabled(true);
     ui.simulation_timer_combo_box->setStyleSheet("color: white; border:1px solid white; padding: 1px 0px 1px 3px");
 
-   emit sendInfoLogMessage("Finished building simulation.");
+    emit sendInfoLogMessage("Finished building simulation.");
 
-   // Visualize the simulation by default call button event handler
-   visualizeSimulationButtonEventHandler();
+    // Visualize the simulation by default call button event handler
+    visualizeSimulationButtonEventHandler();
 }
 
 void RoverGUIPlugin::clearSimulationButtonEventHandler()
@@ -1927,6 +1980,9 @@ void RoverGUIPlugin::clearSimulationButtonEventHandler()
     current_simulated_time_in_seconds = 0.0;
     last_current_time_update_in_seconds = 0.0;
     is_timer_on = false;
+    
+    ui.april_tag_camera_list->clearSelection();
+    ui.april_tag_camera_list->clear();
 }
 
 void RoverGUIPlugin::visualizeSimulationButtonEventHandler()

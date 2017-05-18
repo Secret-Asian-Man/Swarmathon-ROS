@@ -138,6 +138,9 @@ namespace rqt_rover_gui {
 
     // Detect rovers that are broadcasting information
     set<string> findConnectedRovers();
+    
+    // Detect cameras that are broadcasting information
+    set<string> findConnectedCameras();
 
   signals:
 
@@ -171,6 +174,7 @@ namespace rqt_rover_gui {
     void currentRoverChangedEventHandler(QListWidgetItem *current, QListWidgetItem *previous);
     void currentAprilTagCameraChangedEventHandler(QListWidgetItem *current, QListWidgetItem *previous);
     void pollRoversTimerEventHandler();
+    void pollCamerasTimerEventHandler();
     void GPSCheckboxToggledEventHandler(bool checked);
     void EKFCheckboxToggledEventHandler(bool checked);
     void encoderCheckboxToggledEventHandler(bool checked);
@@ -230,12 +234,14 @@ namespace rqt_rover_gui {
 
     string selected_rover_name;
     set<string> rover_names;
+    set<string> camera_names;
     ros::NodeHandle nh;
     QWidget* widget;
     Ui::RoverGUI ui;
 
     QProcess* joy_process;
-    QTimer* rover_poll_timer; // for rover polling
+    QTimer* rover_poll_timer;  // for rover polling
+    QTimer* camera_poll_timer; // for camera polling
 
     QString info_log_messages;
     QString diag_log_messages;
