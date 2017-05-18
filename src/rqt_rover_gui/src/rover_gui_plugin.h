@@ -169,6 +169,7 @@ namespace rqt_rover_gui {
     void receiveInfoLogMessage(QString);
     void receiveDiagLogMessage(QString);
     void currentRoverChangedEventHandler(QListWidgetItem *current, QListWidgetItem *previous);
+    void currentAprilTagCameraChangedEventHandler(QListWidgetItem *current, QListWidgetItem *previous);
     void pollRoversTimerEventHandler();
     void GPSCheckboxToggledEventHandler(bool checked);
     void EKFCheckboxToggledEventHandler(bool checked);

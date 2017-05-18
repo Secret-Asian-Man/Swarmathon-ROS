@@ -116,9 +116,15 @@ namespace rqt_rover_gui
 
     // Setup QT message connections
     connect(this, SIGNAL(sendDiagsDataUpdate(QString, QString, QColor)), this, SLOT(receiveDiagsDataUpdate(QString, QString,QColor)));
+
     connect(ui.rover_list, SIGNAL(currentItemChanged(QListWidgetItem*,QListWidgetItem*)), this, SLOT(currentRoverChangedEventHandler(QListWidgetItem*,QListWidgetItem*)));
     connect(ui.rover_list, SIGNAL(itemDoubleClicked(QListWidgetItem*)), this, SLOT(refocusKeyboardEventHandler()));
     connect(ui.rover_list, SIGNAL(itemClicked(QListWidgetItem*)), this, SLOT(refocusKeyboardEventHandler()));
+
+    connect(ui.april_tag_camera_list, SIGNAL(currentItemChanged(QListWidgetItem*,QListWidgetItem*)), this, SLOT(currentAprilTagCameraChangedEventHandler(QListWidgetItem*,QListWidgetItem*)));
+    connect(ui.april_tag_camera_list, SIGNAL(itemDoubleClicked(QListWidgetItem*)), this, SLOT(refocusKeyboardEventHandler()));
+    connect(ui.april_tag_camera_list, SIGNAL(itemClicked(QListWidgetItem*)), this, SLOT(refocusKeyboardEventHandler()));
+    
     connect(ui.ekf_checkbox, SIGNAL(toggled(bool)), this, SLOT(EKFCheckboxToggledEventHandler(bool)));
     connect(ui.gps_checkbox, SIGNAL(toggled(bool)), this, SLOT(GPSCheckboxToggledEventHandler(bool)));
     connect(ui.encoder_checkbox, SIGNAL(toggled(bool)), this, SLOT(encoderCheckboxToggledEventHandler(bool)));
@@ -592,6 +598,11 @@ void RoverGUIPlugin::simulationTimerEventHandler(const rosgraph_msgs::Clock& msg
 
 void RoverGUIPlugin::currentRoverChangedEventHandler(QListWidgetItem *current, QListWidgetItem *previous)
 {
+    // If we select a rover to view or control, we must deselect the current april tag camera.
+    // We must do this because the rovers share the same view-window for the camera display.
+    // Additionally, we must use the reset() function because we want to clear the current AND previous selection.
+    ui.april_tag_camera_list->reset();
+    
     emit sendInfoLogMessage("Selcted Rover Changed");
 
     if (!current) return; // Check to make sure the current selection isn't null
@@ -683,6 +694,26 @@ void RoverGUIPlugin::currentRoverChangedEventHandler(QListWidgetItem *current, Q
     ui.joystick_control_radio_button->setEnabled(true);
 }
 
+void RoverGUIPlugin::currentAprilTagCameraChangedEventHandler(QListWidgetItem *current, QListWidgetItem *previous)
+{
+    // If we select an april tag camera to view, we must deselect the current rover.
+    // We must do this because the april tag cameras share the same view-window for the camera display.
+    // Additionally, we must use the reset() function because we want to clear the current AND previous selection.
+    ui.rover_list->reset();
+
+    emit sendInfoLogMessage("Selcted April Tag Camera Changed");
+
+    if (!current) return; // Check to make sure the current selection isn't null
+
+    // Extract camera name
+    string camera_name = current->text().toStdString();
+    emit sendInfoLogMessage(QString("Selected camera: ") + QString::fromStdString(camera_name));
+
+    //Set up subscribers
+    image_transport::ImageTransport it(nh);
+    camera_subscriber = it.subscribe("/"+camera_name+"/camera/image", 1, &RoverGUIPlugin::cameraEventHandler, this, image_transport::TransportHints("theora"));
+}
+    
 void RoverGUIPlugin::pollRoversTimerEventHandler()
 {
     // Returns rovers that have created a status topic
@@ -1590,12 +1621,33 @@ void RoverGUIPlugin::buildSimulationButtonEventHandler()
         emit sendInfoLogMessage("Unknown ground plane...");
     }
 
-
     emit sendInfoLogMessage("Adding collection disk...");
     float collection_disk_radius = 0.5; // meters
     sim_mgr.addModel("collection_disk", "collection_disk", 0, 0, 0, collection_disk_radius);
     score_subscriber = nh.subscribe("/collectionZone/score", 10, &RoverGUIPlugin::scoreEventHandler, this);
     simulation_timer_subscriber = nh.subscribe("/clock", 10, &RoverGUIPlugin::simulationTimerEventHandler, this);
+
+    emit sendInfoLogMessage("Adding April Tag Motion Cameras...");
+
+    sim_mgr.addModel("april_tag_cameras/articuno", "articuno", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+    sim_mgr.addModel("april_tag_cameras/moltres", "moltres", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+    sim_mgr.addModel("april_tag_cameras/rayquaza", "rayquaza", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+    sim_mgr.addModel("april_tag_cameras/zapdos", "zapdos", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+
+    QListWidgetItem* articuno = new QListWidgetItem("articuno");
+    QListWidgetItem* moltres = new QListWidgetItem("moltres");
+    QListWidgetItem* rayquaza = new QListWidgetItem("rayquaza");
+    QListWidgetItem* zapdos = new QListWidgetItem("zapdos");
+
+    articuno->setForeground(Qt::white);
+    moltres->setForeground(Qt::white);
+    rayquaza->setForeground(Qt::white);
+    zapdos->setForeground(Qt::white);
+
+    ui.april_tag_camera_list->addItem(articuno);
+    ui.april_tag_camera_list->addItem(moltres);
+    ui.april_tag_camera_list->addItem(rayquaza);
+    ui.april_tag_camera_list->addItem(zapdos);
 
     int n_rovers_created = 0;
     int n_rovers = 3;
