@@ -1,0 +1,15 @@
+material apriltag_26
+{
+  technique
+  {
+    pass
+    {
+      transparent_sorting on
+
+      texture_unit
+      {
+        texture apriltag_26.png
+      }
+    }
+  }
+}
