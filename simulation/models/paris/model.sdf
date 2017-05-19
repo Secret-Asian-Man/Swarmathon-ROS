@@ -86,6 +86,43 @@
 			</axis>
 		</joint>
 
+		<link name='top_apriltag'>
+		  <pose>0 0 0.12 0 0 0</pose>
+			<collision name='collision'>
+				<geometry>
+					<box>
+						<size>0.2159 0.2159 0.006</size>
+					</box>
+				</geometry>
+			</collision>
+			<visual name='visual'>
+				<geometry>
+					<box>
+						<size>0.2159 0.2159 0.006</size>
+					</box>
+				</geometry>
+				<material>
+					<script>
+						<uri>model://swarmie/materials/scripts</uri>
+						<uri>model://swarmie/materials/textures</uri>
+						<name>apriltag_26</name>
+					</script>
+				</material>
+			</visual>
+		</link>
+
+		<joint name="top_apriltag" type="revolute">
+			<parent>base_link</parent>
+			<child>top_apriltag</child>
+			<axis>
+				<xyz>0 0 0</xyz>
+				<limit>
+					<upper>0</upper>
+					<lower>0</lower>
+				</limit>
+			</axis>
+		</joint>
+
 <!--> Begin Cowcatcher Front <-->
 		
 		<link name='CowCatcherFront'>
